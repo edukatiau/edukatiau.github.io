@@ -6,6 +6,7 @@ from PIL import Image, ImageTk
 
 # Variáveis globais
 fotos_padroes = []  # Lista de tuplas (nome, imagem, miniatura)
+foto_padroes_selecionada = None  # Miniatura selecionada atualmente
 threshold_diferenca = 50  # Parâmetro inicial de diferença média
 foto_tk = None  # Imagem capturada atual
 historico = []  # Histórico de comparações (OK/NOK e imagem)
@@ -41,12 +42,32 @@ def adicionar_imagem_padrao():
             imagem_pil.thumbnail((80, 80))
             miniatura = ImageTk.PhotoImage(imagem_pil)
 
-            # Armazenar a imagem padrão com seu nome e miniatura
-            fotos_padroes.append((nome, imagem_padrao, miniatura))
-
-            # Atualizar a exibição no menu lateral
-            botao_miniatura = tk.Button(frame_lateral, image=miniatura, text=nome, compound="top")
+            # Botão da miniatura com comando para seleção
+            botao_miniatura = tk.Button(frame_lateral, image=miniatura, text=nome, compound="top",
+                                        command=lambda: selecionar_imagem_padrao(nome, imagem_padrao, botao_miniatura))
+            botao_miniatura.image = miniatura  # Referência para evitar garbage collection
             botao_miniatura.pack(pady=5)
+
+            # Armazenar a imagem padrão com seu nome, miniatura e botão
+            fotos_padroes.append((nome, imagem_padrao, miniatura, botao_miniatura))
+
+# Função para selecionar uma imagem padrão
+def selecionar_imagem_padrao(nome, imagem_padrao, botao_miniatura):
+    global foto_padroes_selecionada
+
+    # Atualizar a imagem exibida no label principal
+    frame_rgb = cv2.cvtColor(imagem_padrao, cv2.COLOR_BGR2RGB)
+    imagem_pil = Image.fromarray(frame_rgb)
+    foto_tk = ImageTk.PhotoImage(imagem_pil)
+    label_imagem.config(image=foto_tk)
+    label_imagem.image = foto_tk  # Referência para evitar garbage collection
+
+    # Destacar a miniatura selecionada com uma borda verde e remover bordas das outras miniaturas
+    if foto_padroes_selecionada:
+        foto_padroes_selecionada.config(bd=0, relief=tk.FLAT)  # Remover borda da anterior
+
+    botao_miniatura.config(bd=2, relief=tk.SOLID, highlightbackground="green", highlightcolor="green")
+    foto_padroes_selecionada = botao_miniatura  # Atualizar a miniatura selecionada
 
 # Função para capturar uma nova imagem e comparar com todas as imagens padrão
 def capturar_e_comparar():
@@ -126,22 +147,29 @@ def abrir_janela_webcam():
 # Função para atualizar o feed da webcam
 def atualizar_feed(label_video):
     global feed_ativo
-    if feed_ativo:
-        cap = cv2.VideoCapture(0)
-        while True:
-            ret, frame = cap.read()
-            cv2.imshow("teste", frame)
-            #cap.release()
+    cap = cv2.VideoCapture(0)
 
-            # Sai do loop ao pressionar a tecla 'q'
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+    def atualizar():
+        if feed_ativo:
+            ret, frame = cap.read()
+            if ret:
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                imagem_pil = Image.fromarray(frame_rgb)
+                foto_tk = ImageTk.PhotoImage(imagem_pil)
+                label_video.config(image=foto_tk)
+                label_video.image = foto_tk
+            label_video.after(10, atualizar)
+        else:
+            cap.release()
+
+    atualizar()
 
 
 # Função para fechar a janela de visualização da webcam
 def fechar_janela_webcam():
     global feed_ativo
     feed_ativo = False
+    cv2.destroyAllWindows()  # Fecha todas as janelas do OpenCV, caso estejam abertas
     if janela_webcam:
         janela_webcam.destroy()
 
